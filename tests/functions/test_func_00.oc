@@ -1,0 +1,9 @@
+/* invalid data declaration clashes with function definition */
+
+@same:16 (%a:16) {
+	%b:16 = %a;
+	return %b;
+};
+
+
+

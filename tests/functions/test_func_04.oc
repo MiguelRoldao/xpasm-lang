@@ -1,0 +1,12 @@
+/* invalid data declaration clashes with function definition */
+
+@same:16 (%a:16) {
+	%b:16 = %a;
+	:@bad;
+	[%a + 0x8000] = %b;
+	goto @bad;
+	return %a;
+};
+
+
+

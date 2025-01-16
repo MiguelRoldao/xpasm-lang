@@ -1,0 +1,10 @@
+/* invalid data declaration clashes with function definition */
+
+
+?@same:16;
+
+
+@same:16 = 4;
+
+
+

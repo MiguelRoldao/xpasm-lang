@@ -1,0 +1,16 @@
+/* invalid - clashing function declarations */
+
+
+
+
+
+
+
+?@add:16 (%a:16, 
+%b:16);
+
+?@add:8 (%a:16, %b:16);
+
+@same:16 (%a:16) {
+	return %a;
+};

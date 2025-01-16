@@ -1,0 +1,14 @@
+/* invalid data declaration clashes with function definition */
+
+?@get_flag:8 ();
+
+@same:16 (%a:16) {
+	%b:16 = %a;
+	[%a + 0x8000] = %b;
+	%flag:8 = call @get_flag (%bad);
+	goto 0x1000 if %flag;
+	return %a;
+};
+
+
+

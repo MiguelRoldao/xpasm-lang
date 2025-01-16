@@ -1,0 +1,100 @@
+
+// TODO: implement
+// [x] import/export (with renames)
+// [x] type creation
+// [x] structs
+// [x] binary operator definitions eg: '+'
+// [ ] for stmt maybe?
+// [ ] function attributes
+// [ ] lists as core types
+//     [ ] native memory allocation
+// [ ] threading
+//     [ ] session-types
+
+
+
+// language features:
+//
+// Explicit polymorphism is redundant.
+// The complexity of type-checking greatly outweighs, its type well-formedness.
+// Values can be passed polymorphically through anonymous addresses and casts.
+// After all a polymorphic function isn't necessarily programmed for ALL types.
+// Especially from a low-level point of view.
+//
+// Pattern matching (for types) can be achieve through function overloading.
+// Pattern matching (for values) could possibly be implemented. Altough could
+// possibly be implemented, through sugary syntaxed switch case statements...
+
+file : [s_export] [s_import*] (g_stmt)*
+
+s_export : "export" "{" signature_list "}" ";"
+s_import : "import" NAME ["as" NAME] "{" signature_list "}" ";"
+  signature_list : signature ("," signature)*
+
+?g_stmt : s_empty | s_prog | s_func | s_type | s_enum
+s_empty  : ";"
+s_prog   : signature "=" exp ";"
+s_func   : signature e_block ";"
+  signature : id ":" type
+s_type   : NAME "::" type ";"
+s_enum   : NAME "#" "{" enum_list "}" ";"
+  enum_list : enum_elem ("," enum_elem)*
+  enum_elem : NAME ["=" int_lit]
+
+?type : t_union | t_func | basic_type
+t_func  : named_type "->" type
+t_union : basic_type "||" type
+named_type : NAME basic_type
+?basic_type : t_addr | t_alias | t_sized | t_struct
+t_addr   : "@" type
+t_struct : "{" type_list "}"
+         type_list : type ("," type)*
+t_alias  : NAME
+//t_sized  : int_lit
+
+?stmt : s_empty | s_write | s_ignore | s_while | s_do | s_ret
+      | s_continue | s_break
+s_write    : "@" exp "=" exp ";"
+s_ignore   : exp ";"
+s_while    : "while" exp "do" exp ";"
+s_do       : "do" exp "while" exp ";"
+s_ret      : "return" [exp] ";"
+s_continue : "continue" ";"
+s_break    : "brake" ";"
+
+?exp : e_app | e_pipe | basic_exp
+e_app  : basic_exp exp
+e_pipe : (e_app | basic_exp) "|>" exp
+?basic_exp : e_block | e_lambda | e_member | e_read | e_if
+           | e_array | e_closed | terminal
+e_lambda : "\:" t_named_func "=" e_block
+e_member : NAME "." e_member | id
+e_read   : "@" exp
+e_closed : "(" exp ")"
+e_if     : "if" exp "then" exp ["else" exp]
+e_array  : "{" exp_list "}"
+  exp_list : exp ("," exp)*
+e_block  : "{" stmt* "}"
+//     | exp ":" type                     -> cast
+// casts are to be defined like functions
+// Unops and biops should be all defined as funcions
+
+?terminal : id | int_lit | STRING | CHAR
+?int_lit : HEX | BIN | DECIMAL | ZERO
+?id : NAME | SYMBOL
+
+DECIMAL : /[1-9][0-9]*/
+HEX.2 : /0x[0-9a-fA-F]+/
+BIN.2 : /0b[01]+/
+ZERO : /0/
+
+NAME : /[_a-zA-Z][_a-zA-Z0-9]*/
+SYMBOL : /[^\w\s(){}\[\],.;@!?]+/
+
+STRING : /"([\S ])*?"/
+CHAR : /'([\S ])*?'/
+
+LINE_COMMENT : /;;.*\n/
+
+%ignore LINE_COMMENT
+%ignore " "|"\t"|"\n"|"\r"
