@@ -5,9 +5,9 @@ import argparse
 
 from exceptions import CompilationException, OneSnippetException, TwoSnippetsException
 import syntaxtree as Ast
-from typechecker import TypeChecker
-from optimizer import Optimizer
-from linker import Linker
+# from typechecker import TypeChecker
+# from optimizer import Optimizer
+# from linker import Linker
 
 from generatorbase import Generator
 import c
@@ -24,6 +24,9 @@ class Application():
 				file = f.read()
 
 				ast = Ast.generateAST (path, file)
+
+				print(ast.pretty())
+				return
 
 				try:
 					TypeChecker().check(ast)

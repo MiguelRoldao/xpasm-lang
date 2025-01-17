@@ -30,14 +30,15 @@ def generateAST(file_path:str, file: str) -> str:
 		print(ast_lark)
 	except lark.exceptions.UnexpectedCharacters as e:
 		#print(f"\nParserError: Unexpected character '{e.char}' at line {e.line} col {e.column}:\n\n{e._context}\n{e.}")
-		print("\nParser error: " + str(e))
+		print("\nLexer error: " + str(e))
 		return
 	except lark.exceptions.UnexpectedToken as e:
-		print(f"{e}\n{e.get_context(file, 100)}")
+		print(f"Parser error: {e}\n{e.get_context(file, 100)}")
 		print(e._terminals_by_name)
 		print(e.considered_rules)
 		exit()
 
+	print(ast_lark.pretty())
 	
 	cleaner = Cleaner()
 	cleaner.path = file_path

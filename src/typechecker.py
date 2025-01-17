@@ -198,19 +198,19 @@ class TypeChecker():
 		else:
 			return t
 
-	def resolveAliasTypes(definitions:Definitions) -> None:
-			# TODO: make sure this is how to iterate through a dictionary
-			name:str
-			definition:Definition
-			for name, definition in definitions.ctx.items():
-				if isinstance(definition.type, MetaT):
+	# def resolveAliasTypes(definitions:Definitions) -> None:
+	# 		# TODO: make sure this is how to iterate through a dictionary
+	# 		name:str
+	# 		definition:Definition
+	# 		for name, definition in definitions.ctx.items():
+	# 			if isinstance(definition.type, MetaT):
 					
-				if isinstance(definition.type, AliasT):
-					definitions.
-				elif isinstance(definition.type, FuncT):
-					TypeChecker.resolveAliasType
-				else:
-					pass
+	# 			if isinstance(definition.type, AliasT):
+	# 				definitions.
+	# 			elif isinstance(definition.type, FuncT):
+	# 				TypeChecker.resolveAliasType
+	# 			else:
+	# 				pass
 ###########################################
 
 
