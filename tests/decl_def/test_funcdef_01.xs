@@ -1,9 +1,9 @@
-/* invalid: duplicate function definition */
+.. invalid: duplicate function definition 
 
-same : a u16 -> u16 {
+same : a u16 -> u16 = {
 	ret a;
 }
 
-same : a u16 -> u16 {
+same : a u16 -> u16 = {
 	ret a;
 }

@@ -75,69 +75,103 @@
 // Pattern matching (for values) could possibly be implemented.
 //   Altough could possibly be implemented, through sugary syntaxed
 //   switch case statements...
+//
+//
+// ## f a b   /vs/   f(a,b) ##
+// after a lot of pondering over the cons and pros of both syntax
+// aproaches, the conclusion is that a free 'f a b' syntax involves
+// A LOT of complexity for compilation. Resolving most expressions
+// only at type checking. Resulting in VERY HIGH compilation times.
+// On the other hand, 'f(a,b)' syntax is very easy to parse but doesn't
+// allow for infix functions such as 'a + b'. It also makes the uses of
+// a pipe operator a bit unintuitive.
+//
+// To overcome this, the solution passes for an hybrid approach where
+// the default syntax is 'f(a,b)' but alows an exception for 1 to 2
+// arguments infix functions, such as '1 + 2', 'a++'. '++a' Is not valid.
+// The pipe operator can be implemente alognside a receptacle operator:
+// 'f(a, b) |> g(., c);' This pipe/receptacle operator is semantical (an
+// infix bioperator)
 
 file : [s_export] [s_import] (g_stmt)*
 
-s_export : "export" "{" signature_list "}" ";"
-s_import : "import" NAME ["as" NAME] "{" signature_list "}" ";"
-  signature_list : signature ("," signature)*
+s_export : "export" "{" s_decl* "}" ";"
+s_import : "import" NAME ["as" NAME] "{" s_decl* "}" ";"
 
-?g_stmt : s_empty | s_prog | s_func | s_type | s_enum
-s_empty : ";"
-s_prog  : signature "=" exp ";"
-s_func  : signature e_block ";"
-  signature : id [attr] ":" type
-    attr : NAME
-s_type  : NAME "::" type ";"
-s_enum  : NAME "#" "{" enum_list "}" ";"
+?g_stmt : s_nop | s_decl | s_data | s_func | s_type | s_enum 
+s_nop  : ";"
+s_decl : (sig_data | sig_func) ";"
+s_data : sig_data "=" exp ";"
+s_func : (sig_func | sig_infix) block ";"
+  block : "{" stmt* "}"
+
+sig_data : NAME [attr] ":" t_data
+sig_func : NAME [attr] ":" t_func
+sig_infix : SYMBOL [attr] ":" t_infix
+attr : NAME
+
+s_type : NAME "::" t_data ";"
+s_enum : NAME "#" "{" enum_list "}" ";"
   enum_list : enum_elem ("," enum_elem)*
   enum_elem : NAME ["=" int_lit]
 
-?type : t_union | t_func | basic_type
-t_func  : param op_t_func type
-  ?op_t_func : op_func | op_unord_func
-    op_func : "->"
-    op_unord_func : "?->"
-  param : NAME basic_type
-t_union : basic_type "||" type
-?basic_type : t_addr | t_alias | t_struct | t_paren | t_arr //| t_sized 
-t_addr   : basic_type "@"
-t_struct : "{" type_list "}"
-  type_list : signature ("," signature)*
+?type : t_paren | t_func | t_data
+t_paren : "(" type ")"
+t_func  : [t_data] "("[param_list]")"
+t_infix : "("[param_list]")" t_data "("[param_list]")"
+  param_list : param ("," param)*
+    param : NAME t_data
+
+// t_data: every type whose value's size, in memory, is deducible by
+// the type alone. i.e. everything except a function.
+?t_data : t_alias | t_addr | t_struct | t_array
+t_addr   : (t_data | t_paren) "@"
+t_struct : "{" t_data_list "}"
+  t_data_list : t_data (";" t_data)* ";"?
 t_alias  : NAME
-t_paren  : "(" type ")"
-t_arr    : basic_type "[" [int_lit] "]"
+t_array  : t_data "[" int_lit "]"
 //t_sized  : int_lit
+//t_union : basic_type "||" type    // unions seem a bit anti-type
+// corrected-ness. if you want to access data in different ways,
+// create a custom a type and use an explicit cast function.
 
-?stmt : s_decl | s_inf_decl | s_empty | s_write | s_ignore
-      | s_while | s_do | s_ret | s_continue | s_break
-s_decl     : signature "=" exp ";"
-s_inf_decl : NAME "=" exp ";"
-s_write    : "@" basic_exp "=" exp ";"
-s_ignore   : exp ";"
-s_while    : "while" basic_exp "do" e_block ";"
-s_do       : "do" e_block "while" basic_exp ";"
-s_ret      : "ret" [exp] ";"
-s_continue : "continue" ";"
-s_break    : "brake" ";"
+?stmt : s_nop | s_decl | s_data | s_func
+      | s_comp | s_if | s_while | s_do
+      | s_ret | s_tail | s_cont | s_break
+s_comp  : exp ";"
+s_if    : "if" e_basic "then" block "else" block ";"
+s_while : "while" e_basic "do" block ";"
+s_do    : "do" block "while" e_basic ";"
+s_ret   : "ret" [exp] ";"
+s_tail  : "tail" e_call ";"
+s_cont  : "continue" ";"
+s_break : "brake" ";"
 
-exp : basic_exp+
-// e_pipe : (e_app | basic_exp) "|>" exp
-?basic_exp : e_block | e_lambda | e_member | e_read | e_if
-           | e_array | e_closed | terminal
-e_lambda : "\\" [":" type] "=" e_block
-e_member : NAME "." (e_member | id)
-e_read   : "@" basic_exp
-e_closed : "(" exp ")"
-e_if     : "if" basic_exp "then" basic_exp ["else" basic_exp]
-e_array  : "{" exp_list "}"
+?exp : e_basic | e_assign | e_index | e_if
+    | e_prefix | e_suffix | e_infix
+e_assign : exp "=" exp
+e_index  : e_basic "[" exp "]"
+e_if     : "if" e_basic "then" e_basic "else" e_basic
+e_prefix : SYMBOL e_basic
+e_suffix : e_basic SYMBOL
+e_infix  : e_basic SYMBOL e_basic
+
+?e_basic : e_paren | e_array | e_call
+         | e_member | e_recep | e_lambda | terminal
+e_paren : "(" exp ")"
+e_array : "{" exp_list "}"
+e_call  : NAME "(" exp_list ")"
   exp_list : exp ("," exp)*
-e_block  : "{" stmt* "}"
-//     | exp ":" type                     -> cast
-// casts are to be defined like functions
-// Unops and biops should be all defined as funcions
+e_member: NAME "." (e_member | NAME)
+e_recep : "."
+e_lambda: "\\" [":" type] block
+// e_read   : "@" basic_exp   // its just a case of an e_prefix
+//     | exp ":>" type                     -> cast
+// casts are to be defined like infix functions, not as
+// a grammar rule. They are, in fact, type convertion functions.
+// Unops and biops should be all defined as funcions.
 
-?terminal : id | int_lit | STRING | CHAR
+?terminal : NAME | int_lit | STRING | CHAR
 ?int_lit : HEX | BIN | DECIMAL | ZERO
 ?id : NAME | SYMBOL
 
@@ -147,7 +181,7 @@ BIN.2 : /0b[01]+/
 ZERO : /0/
 
 NAME : /[_a-zA-Z][_a-zA-Z0-9]*/
-SYMBOL : /[^\w\s(){}\[\],.:;@!?]+/
+SYMBOL : /[^\w\s(){}\[\],.;=@!?][^\w\s(){}\[\],.;@!?]*/
 
 STRING : /"([\S ])*?"/
 CHAR : /'([\S ])*?'/

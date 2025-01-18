@@ -1,9 +1,16 @@
-/* invalid data declaration clashes with function definition */
+.. invalid data declaration clashes with function definition
+..
+..@same:16 (%a:16) {
+..	%b:16 = %a;
+..	return %b;
+..};
+..
+..same : a u16 -> u16 = {
+..	b : u16 = a;
+..	ret b;
+..};
 
-@same:16 (%a:16) {
-	%b:16 = %a;
-	return %b;
+same : u16 (a u16) {
+	b : u16 = a;
+	ret b;
 };
-
-
-
