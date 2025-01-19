@@ -133,7 +133,7 @@
 //       '--rename <file> as <new_module_name>'.
 
 
-file : [s_export] [s_import] (g_stmt)*
+file : [s_export] [s_import+] g_stmt*
 
 s_export : "export" NAME "{" s_decl* "}" ";"
 s_import : "import" [NAME] ["as" NAME] ["{" s_decl* "}"] ";"
@@ -197,9 +197,9 @@ e_infix  : exp fix_id e_basic
          | e_member | e_recep | e_lambda | terminal
 ?e_paren: "(" exp ")"
 e_array : "{" exp_list "}"
-e_call  : NAME "(" exp_list ")"
+e_call  : (NAME | e_member) "(" exp_list ")"
   exp_list : exp ("," exp)*
-e_member: NAME "." (e_member | NAME)
+e_member: NAME "." (NAME | e_member)
 e_recep : "."
 e_lambda: "\\" [":" type] block
 // e_read   : "@" basic_exp   // its just a case of an e_prefix

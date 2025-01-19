@@ -39,6 +39,7 @@ def generateAST(file_path:str, file: str) -> str:
 		exit()
 
 	print(ast_lark.pretty())
+	print(ast_lark)
 	
 	cleaner = Cleaner()
 	cleaner.path = file_path
@@ -243,6 +244,14 @@ class Name(Terminal):
 	value:str
 
 @dataclass
+class NameFix(Terminal):
+	value:str
+
+@dataclass
+class Symbol(Terminal):
+	value:str
+
+@dataclass
 class Integer(Terminal):
 	value:int
 
@@ -251,74 +260,93 @@ class EArray(Exp):
 	elements:list[Exp]
 
 @dataclass
+class ERecep(Exp): pass
+
+@dataclass
 class EIf(Exp):
 	condition:Exp
 	etrue:Exp
 	efalse:Exp
 
 @dataclass
-class ERead(Exp):
-	address:Exp
-
-@dataclass
 class EMember(Exp):
-	parent:Node
-	member:Name
+	child:Node
+	name:Name
 
 @dataclass
 class ELambda(Exp):
-	type:Type
+	type:Type|None
 	body:Exp
 
 @dataclass
-class EPipe(Exp):
-	input:Exp
-	output:Exp
+class ECall(Exp):
+	func:Name|EMember
+	args:list[Exp]
 
 @dataclass
-class EBlock(Exp):
-	statements:list[Stmt]|tuple[Stmt]
+class EFix(Exp):
+	id:Symbol|NameFix
+	arg1:Exp
+	arg2:Exp|None
 
 @dataclass
-class EApp(Exp):
-	func:Exp
-	arg:Exp
+class EIndex(Exp):
+	obj:Exp
+	index:Exp
+
+@dataclass
+class EAssign(Exp):
+	obj:Exp
+	value:Exp
 
 @dataclass
 class SBreak(Stmt): pass
 
 @dataclass
-class SContinue(Stmt): pass
+class SCont(Stmt): pass
 
 @dataclass
 class SReturn(Stmt):
 	value:Exp|None
 
 @dataclass
+class STail(Stmt):
+	call:ECall
+
+@dataclass
+class Block():
+	statements:list[Stmt]
+
+@dataclass
 class SDo(Stmt):
 	condition:Exp
-	body:Exp
+	body:Block
 
 @dataclass
 class SWhile(Stmt):
 	condition:Exp
-	body:Exp
+	body:Block
 
 @dataclass
-class SIgnore(Stmt):
+class SIf(Stmt):
+	condition:Exp
+	if_body:Block
+	else_body:Block
+
+@dataclass
+class SComp(Stmt):
 	exp:Exp
 
 @dataclass
-class SWrite(Stmt):
-	address:Exp
-	value:Exp
-
-
-@dataclass
 class Signature(Node):
-	name:Name
+	name:Name|NameFix|Symbol
+	attr:Name|None
 	type:Type
 
+@dataclass
+class TArray(Type):
+	type:Type
+	size:Integer|None
 
 @dataclass
 class TStruct(Type):
@@ -336,26 +364,15 @@ class TStruct(Type):
 		return True
 
 @dataclass
-class TNamedFunc(Type):
-	parameter:Signature
-	ret:Type
-
-@dataclass
 class TFunc(Type):
-	parameter:Type
-	ret:Type
+	parameters:list[Signature]
+	ret:Type|None
 
 @dataclass
-class TUnion(Type):
-	t1:Type
-	t2:Type
-
-@dataclass
-class TSized(Type):
-	size:Integer
-
-@dataclass
-class TVoid(Type): pass
+class TFix(Type):
+	parameter1:Signature|None
+	parameter2:Signature|None
+	ret:Type|None
 
 @dataclass
 class TAlias(Type):
@@ -369,7 +386,7 @@ class TAddr(Type):
 @dataclass
 class EnumElem(Node):
 	name:Name
-	exp:Integer|None
+	point:Integer|None
 	value:int = 0
 
 @dataclass
@@ -394,34 +411,37 @@ class SType(Stmt):
 	type:Type
 
 @dataclass
-class SBiop(Stmt):
-	sig1:Signature
-	sig2:Signature
-	ret:Type
-	exp:Exp
+class SFunc(Stmt):
+	signature:Signature
+	block:Block
 
 @dataclass
-class SProg(Stmt):
+class SData(Stmt):
 	signature:Signature
 	exp:Exp
 
 @dataclass
-class SEmpty(Stmt): pass
+class SDecl(Stmt):
+	signature:Signature
+
+@dataclass
+class SNop(Stmt): pass
 
 
 @dataclass
 class SImport(Node):
-	name:Name
+	name:Name|None
 	rename:Name|None
 	signatures:list[Signature]
 
 @dataclass
 class SExport(Node):
+	name:Name
 	signatures:list[Signature]
 
 @dataclass
 class File(Node):
-	export:SExport
+	export:SExport|None
 	imports:list[SImport]
 	statements:list[Node]
 
