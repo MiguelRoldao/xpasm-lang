@@ -1,4 +1,7 @@
 
+// ### Miguel's rules of slaying ###
+//
+//
 // TODO: implement
 // [x] import/export (with renames)
 // [x] type creation
@@ -10,9 +13,8 @@
 //     [ ] native memory allocation
 // [ ] threading
 //     [ ] session-types
-
-
-
+//
+//
 // language features:
 //
 // ## ATTRIBUTES ##
@@ -57,7 +59,7 @@
 // not disrupt a strong typed context. That is well-typedness is not
 // lost by otherwise calling type-less pointers (e.g. @). Making '@'
 // an invalid type. A polymorphic sort function could have the
-// following signature: "sort : [<a>] -> [<a>]".
+// following signature: "sort : <a>[] (arg : <a>[])".
 //
 // How do polymorphic functions behave in the prensence of overloads?
 //     If a specific type implementation of  a function is equivalent
@@ -92,23 +94,59 @@
 // The pipe operator can be implemente alognside a receptacle operator:
 // 'f(a, b) |> g(., c);' This pipe/receptacle operator is semantical (an
 // infix bioperator)
+//
+//
+// ## IMPORT SYSTEM ##
+// Export:
+//   Makes a set of signatures available to other modules, under NAME.
+//   Unlike the import statement, not specifying any signature, will not
+//   lead to exporting all signatures. Instead, an empty export statement
+//   results in the module being invisible to other modules.
+// Import:
+//   Imports signatures from other modules into this module's scope.
+//   NAME: if present, it specifies from which module to import the
+//     signatures from. If not, the compiler will try to find the requested
+//     signatures from any module present during compilation.
+//   as NAME: if present, contains all the imported signatures inside NAME,
+//     which can be accessed as a structure. This is useful to declutter
+//     scope of a module.
+//   list of signatures: the signatures to be imported. if no signature is
+//     given, all of the module' signatures will be imported.
+// Signature clashes:
+//   Signature clashes are treated as errors. Use the above tools to solve
+//     these clashes.
+//   An import statement without a module name or signatures is not an
+//     but will import everything from every module available. Be prepared
+//     for signature clash hell.
+//   An import statement with no import module name, with an "as NAME"
+//     present, will, as expected, contain every signature within the
+//     specified NAME.
+//   Multiple import statements inside a module are allowed (and
+//     recommended), however, if two different import statements try to
+//     import the same signature, this will be considered a signature
+//     clash.
+// Module name clashes:
+//   If two modules happen to have the same name inside the same compilation
+//     scope (this is most likely to to a poor naming convention...), worry
+//     not! There are ways to deal with this. When passing the files to the
+//     compiler, instead of passing '<file>', pass
+//       '--rename <file> as <new_module_name>'.
+
 
 file : [s_export] [s_import] (g_stmt)*
 
-s_export : "export" "{" s_decl* "}" ";"
-s_import : "import" NAME ["as" NAME] "{" s_decl* "}" ";"
+s_export : "export" NAME "{" s_decl* "}" ";"
+s_import : "import" [NAME] ["as" NAME] ["{" s_decl* "}"] ";"
 
 ?g_stmt : s_nop | s_decl | s_data | s_func | s_type | s_enum 
 s_nop  : ";"
-s_decl : (sig_data | sig_func) ";"
-s_data : sig_data "=" exp ";"
-s_func : (sig_func | sig_fix) block ";"
+s_decl : signature ";"
+s_data : signature "=" exp ";"
+s_func : signature block ";"
   block : "{" stmt* "}"
 
-sig_data : NAME [attr] ":" t_data
-sig_func : NAME [attr] ":" t_func
-sig_fix  : (("`" NAME "`") | SYMBOL) [attr] ":" t_fix
-attr : NAME
+signature : id [attr] ":" type
+?attr : NAME
 
 s_type : NAME "::" t_data ";"
 s_enum : NAME "#" "{" enum_list "}" ";"
@@ -117,18 +155,16 @@ s_enum : NAME "#" "{" enum_list "}" ";"
 
 ?type : t_paren | t_func
       | t_fix | t_data
-t_paren : "(" type ")"
-t_func  : [t_data] "("[param_list]")"
-t_fix   : [t_data] "("[param_list]")" "("[param_list]")"
-  param_list : param ("," param)*
-    param : NAME t_data
+?t_paren : "(" type ")"
+t_func  : [t_data] "(" param_list ")"
+t_fix   : [t_data] "(" param_list ")" "(" param_list ")"
+  param_list : s_decl*
 
 // t_data: every type whose value's size, in memory, is deducible by
 // the type alone. i.e. everything except a function.
 ?t_data : t_alias | t_addr | t_struct | t_array
 t_addr   : (t_data | t_paren) "@"
-t_struct : "{" t_data_list "}"
-  t_data_list : t_data (";" t_data)* ";"?
+t_struct : "{" s_decl* "}"
 t_alias  : NAME
 t_array  : t_data "[" [int_lit] "]"
 //t_sized  : int_lit
@@ -140,7 +176,7 @@ t_array  : t_data "[" [int_lit] "]"
       | s_comp | s_if | s_while | s_do
       | s_ret | s_tail | s_cont | s_break
 s_comp  : exp ";"
-s_if    : "if" e_basic "then" block "else" block ";"
+s_if    : "if" e_basic "then" block ["else" block] ";"
 s_while : "while" e_basic "do" block ";"
 s_do    : "do" block "while" e_basic ";"
 s_ret   : "ret" [exp] ";"
@@ -153,13 +189,13 @@ s_break : "brake" ";"
 e_assign : exp "=" exp
 e_index  : e_basic "[" exp "]"
 e_if     : "if" e_basic "then" e_basic "else" e_basic
-e_prefix : SYMBOL e_basic
-e_suffix : exp SYMBOL
-e_infix  : exp SYMBOL e_basic
+e_prefix : fix_id e_basic
+e_suffix : exp fix_id
+e_infix  : exp fix_id e_basic
 
 ?e_basic : e_paren | e_array | e_call
          | e_member | e_recep | e_lambda | terminal
-e_paren : "(" exp ")"
+?e_paren: "(" exp ")"
 e_array : "{" exp_list "}"
 e_call  : NAME "(" exp_list ")"
   exp_list : exp ("," exp)*
@@ -174,7 +210,8 @@ e_lambda: "\\" [":" type] block
 
 ?terminal : NAME | int_lit | STRING | CHAR
 ?int_lit : HEX | BIN | DECIMAL | ZERO
-?id : NAME | SYMBOL
+?id : NAME | fix_id
+?fix_id : NAME_FIX | SYMBOL
 
 DECIMAL : /[1-9][0-9]*/
 HEX.2 : /0x[0-9a-fA-F]+/
@@ -182,6 +219,7 @@ BIN.2 : /0b[01]+/
 ZERO : /0/
 
 NAME : /[_a-zA-Z][_a-zA-Z0-9]*/
+NAME_FIX : /`[_a-zA-Z][_a-zA-Z0-9]*`/
 SYMBOL : /[^\w\s(){}\[\],.;=`@!?][^\w\s(){}\[\],.;@!?]*/
 
 STRING : /"([\S ])*?"/
