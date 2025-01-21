@@ -45,7 +45,8 @@ def generateAST(file_path:str, file: str) -> str:
 	cleaner.path = file_path
 	cleaner.lines = file.splitlines()
 	ast:File = cleaner.transform(ast_lark)
-	print(ast.dump())
+	print(ast.json())
+	print("This was ast.json()")
 
 	return ast
 
@@ -75,29 +76,36 @@ class Node():
 
 	def __eq__(self, __value: object) -> bool:
 		return type(self) == type(__value)
-
-	def dump(self, indent:str = ""):
+	
+	def json(self, dump_meta:bool=False, indent:str = ""):
 		indent_char = "  "
 
-		def valueToStr(value, indent):
-			s = ""
-			if isinstance(value, String) or isinstance(value, Char):
-				s += "\n" + indent + value.__class__.__name__ + "\t" + str(value.value.encode())
-			elif isinstance(value, Node):
-				s += value.dump(indent)
+		def objToJson(obj, indent):
+			if isinstance(obj, String) or isinstance(obj, Char):
+				return f'"str(obj.value.encode())"'
+			elif isinstance(obj, Node):
+				return obj.json(dump_meta, indent)
 			elif isinstance(value, tuple) or isinstance(value, list):
-				for val in value:
-					s += valueToStr(val, indent)
+				if (len(value) == 0):
+					return '[]'
+				s = f'[\n{indent+indent_char}'
+				for elem in value:
+					a = objToJson(elem, indent+indent_char)
+					s += f'{a},\n'
+				return f'{s[:-2]}\n{indent}]'
+			elif value == None:
+				return 'null'
 			else:
-				s += "\t" + str(value)
-			return s
-			
-		s = "\n" + indent + self.__class__.__name__
+				return f'"{value}"'
+
+		indented = indent + indent_char
+		s = f'{{\n{indented}"class": "{self.__class__.__name__}",\n'
 		for key in self.__dict__:
-			if key != 'meta' and key != 'reference':
+			if (key != 'meta' or dump_meta) and key != 'reference':
 				value = self.__getattribute__(key)
-				s += valueToStr(value, indent + indent_char)
-		return s
+				a = objToJson(value, indented)
+				s += f'{indented}"{key}": {a},\n'
+		return f'{s[:-2]}\n{indent}}}'
 	
 	def traverse(self, f, topdown=True):
 		if topdown:
@@ -218,7 +226,7 @@ class Node():
 		if not topdown:
 			f(self)
 
-
+# Dataclasses for building the AST
 @dataclass
 class Type(Node): pass
 
@@ -244,16 +252,20 @@ class Name(Terminal):
 	value:str
 
 @dataclass
-class NameFix(Terminal):
-	value:str
-
-@dataclass
 class Symbol(Terminal):
 	value:str
 
 @dataclass
 class Integer(Terminal):
 	value:int
+
+@dataclass
+class EAt(Exp):
+	addr:Exp
+
+@dataclass
+class EAddr(Exp):
+	obj:Exp
 
 @dataclass
 class EArray(Exp):
@@ -270,13 +282,17 @@ class EIf(Exp):
 
 @dataclass
 class EMember(Exp):
-	child:Node
 	name:Name
+	child:Node
+
+@dataclass
+class Block(Node):
+	statements:list[Stmt]
 
 @dataclass
 class ELambda(Exp):
 	type:Type|None
-	body:Exp
+	block:Block
 
 @dataclass
 class ECall(Exp):
@@ -284,10 +300,20 @@ class ECall(Exp):
 	args:list[Exp]
 
 @dataclass
-class EFix(Exp):
-	id:Symbol|NameFix
+class EPrefix(Exp):
+	id:Symbol
+	arg:Exp
+
+@dataclass
+class ESuffix(Exp):
+	id:Symbol
+	arg:Exp
+
+@dataclass
+class EInfix(Exp):
+	id:Symbol
 	arg1:Exp
-	arg2:Exp|None
+	arg2:Exp
 
 @dataclass
 class EIndex(Exp):
@@ -300,13 +326,18 @@ class EAssign(Exp):
 	value:Exp
 
 @dataclass
+class EPipe(Exp):
+	obj:Exp
+	value:Exp
+
+@dataclass
 class SBreak(Stmt): pass
 
 @dataclass
 class SCont(Stmt): pass
 
 @dataclass
-class SReturn(Stmt):
+class SRet(Stmt):
 	value:Exp|None
 
 @dataclass
@@ -314,24 +345,20 @@ class STail(Stmt):
 	call:ECall
 
 @dataclass
-class Block():
-	statements:list[Stmt]
-
-@dataclass
 class SDo(Stmt):
 	condition:Exp
-	body:Block
+	block:Block
 
 @dataclass
 class SWhile(Stmt):
 	condition:Exp
-	body:Block
+	block:Block
 
 @dataclass
 class SIf(Stmt):
 	condition:Exp
-	if_body:Block
-	else_body:Block
+	if_block:Block
+	else_block:Block
 
 @dataclass
 class SComp(Stmt):
@@ -339,7 +366,7 @@ class SComp(Stmt):
 
 @dataclass
 class Signature(Node):
-	name:Name|NameFix|Symbol
+	name:Name|Symbol
 	attr:Name|None
 	type:Type
 
@@ -370,8 +397,8 @@ class TFunc(Type):
 
 @dataclass
 class TFix(Type):
-	parameter1:Signature|None
-	parameter2:Signature|None
+	parameters1:list[Signature]
+	parameters2:list[Signature]
 	ret:Type|None
 
 @dataclass
@@ -386,24 +413,12 @@ class TAddr(Type):
 @dataclass
 class EnumElem(Node):
 	name:Name
-	point:Integer|None
-	value:int = 0
+	tag:Integer|None
 
 @dataclass
 class SEnum(Stmt):
 	name:Name
 	elems:list[EnumElem]
-	def __init__(self, meta:Meta, name:Name, elems:list[EnumElem]):
-		self.meta = meta
-		self.name = name
-
-		previous_value:int = 0
-		for elem in elems:
-			if elem.exp:
-				previous_value = elem.exp.value
-			elem.value = previous_value
-			previous_value += 1 if previous_value >= 0 else -1
-		self.elems = elems
 
 @dataclass
 class SType(Stmt):
@@ -460,22 +475,28 @@ class Cleaner(Transformer):
 	def file(self, meta, export, imports, *statements):
 		return File(self.obj(meta), export, imports, statements)
 
+	def import_list(self, meta, *imports):
+		return list(imports)
+
 	# exports/imports
-	def s_export(self, meta, *signatures):
-		return SExport(self.obj(meta), signatures)
+	def s_export(self, meta, name, *signatures):
+		return SExport(self.obj(meta), name, signatures)
 	
 	def s_import(self, meta, name, rename, *signatures):
 		return SImport(self.obj(meta), name, rename, signatures)
 	
 	# global statements
-	def s_empty(self, meta):
-		return SEmpty(self.obj(meta))
+	def s_nop(self, meta):
+		return SNop(self.obj(meta))
 	
-	def s_prog(self, meta, signature, exp):
-		return SProg(self.obj(meta), signature, exp)
+	def s_decl(self, meta, signature):
+		return SDecl(self.obj(meta), signature)
+		
+	def s_data(self, meta, signature, exp):
+		return SData(self.obj(meta), signature, exp)
 
-	def s_biop(self, meta, sig1, sig2, type, exp):
-		return SBiop(self.obj(meta), sig1, sig2, type, exp)
+	def s_func(self, meta, signature, block):
+		return SFunc(self.obj(meta), signature, block)
 
 	def s_type(self, meta, name, type):
 		return SType(self.obj(meta), name, type)
@@ -485,85 +506,105 @@ class Cleaner(Transformer):
 	
 	def enum_elem(self, meta, name, value):
 		return EnumElem(self.obj(meta), name, value)
+	
+	# signature
+	def signature(self, meta, name, attr, type):
+		return Signature(self.obj(meta), name, attr, type)
+	
+	# block
+	def block(self, meta, *statements):
+		return Block(self.obj(meta), statements)
 
 	#types
-	def t_addr(self, meta, type):
-		TAddr(self.obj(meta), type)
+	def t_func(self, meta, ret, param):
+		return TFunc(self.obj(meta), param, ret)
 	
+	def t_fix(self, meta, ret, param1, param2):
+		return TFix(self.obj(meta), param1, param2, ret)
+
+	def param_list(self, meta, *params):
+		return list(params)
+
 	def t_alias(self, meta, name):
 		return TAlias(self.obj(meta), name)
 	
-	def t_sized(self, meta, size:Integer):
-		if size.value == 0:
-			return TVoid(self.obj(meta))
-		else:
-			return TSized(self.obj(meta), size)
-	
-	def t_union(self, meta, t1, t2):
-		return TUnion(self.obj(meta), t1, t2)
-
-	def t_func(self, meta, param, ret):
-		return TFunc(self.obj(meta), param, ret)
-	
-	def t_named_func(self, meta, param, ret):
-		return TNamedFunc(self.obj(meta), param, ret)
-	
+	def t_addr(self, meta, type):
+		TAddr(self.obj(meta), type)
+		
 	def t_struct(self, meta, *members):
 		return TStruct(self.obj(meta), members)
-	
-	# signature
-	def signature(self, meta, name, type):
-		return Signature(self.obj(meta), name, type)
-	
-	# attributes
+
+	def t_array(self, meta, type, size):
+		return TArray(self.obj(meta), type, size)
 	
 	# statements
-	def s_write(self, meta, address, value):
-		return SWrite(self.obj(meta), address, value)
+	def s_comp(self, meta, exp):
+		return SComp(self.obj(meta), exp)
 	
-	def s_ignore(self, meta, exp):
-		return SIgnore(self.obj(meta), exp)
+	def e_if(self, meta, cond, b_true, b_false):
+		return SIf(self.obj(meta), cond, b_true, b_false)
+
+	def s_while(self, meta, cond, block):
+		return SWhile(self.obj(meta), cond, block)
 	
-	def s_while(self, meta, cond, body):
-		return SWhile(self.obj(meta), cond, body)
+	def s_do(self, meta, block, cond):
+		return SDo(self.obj(meta), cond, block)
 	
-	def s_do(self, meta, cond, body):
-		return SDo(self.obj(meta), cond, body)
+	def s_tail(self, meta, exp):
+		return STail(self.obj(meta), exp)
 	
 	def s_ret(self, meta, exp):
-		return SReturn(self.obj(meta), exp)
+		return SRet(self.obj(meta), exp)
 	
 	def s_continue(self, meta):
-		return SContinue(self.obj(meta))
+		return SCont(self.obj(meta))
 	
 	def s_break(self, meta):
 		return SBreak(self.obj(meta))
-	
+
 	# expressions
-	def e_app(self, meta, func, arg):
-		return EApp(self.obj(meta), func, arg)
+	def e_pipe(self, meta, e_from, e_to):
+		return EPipe(self.obj(meta), e_from, e_to)
 
-	def e_block(self, meta, *statements):
-		return EBlock(self.obj(meta), statements)
-	
-	def e_pipe(self, meta, input, output):
-		return EPipe(self.obj(meta), input, output)
-	
-	def e_lambda(self, meta, type, body):
-		return ELambda(self.obj(meta), type, body)
-	
-	def e_member(self, meta, parent, member):
-		return EMember(self.obj(meta), parent, member)
+	def e_assign(self, meta, obj, val):
+		return EAssign(self.obj(meta), obj, val)
 
-	def e_read(self, meta, exp):
-		return ERead(self.obj(meta), exp)
-	
+	def e_index(self, meta, obj, id):
+		return EIndex(self.obj(meta), obj, id)
+
 	def e_if(self, meta, cond, e_true, e_false):
 		return EIf(self.obj(meta), cond, e_true, e_false)
-	
-	def e_array(self, meta, *data_list):
-		return EArray(self.obj(meta), data_list)
 
+	def e_prefix(self, meta, id, exp):
+		return EPrefix(self.obj(meta), id, exp)
+	
+	def e_suffix(self, meta, exp, id):
+		return ESuffix(self.obj(meta), id, exp)
+
+	def e_infix(self, meta, e1, id, e2):
+		return EInfix(self.obj(meta), id, e1, e2)
+
+	def e_array(self, meta, *exps):
+		return EArray(self.obj(meta), exps)
+
+	def e_call(self, meta, func, *args):
+		return ECall(self.obj(meta), func, args)
+
+	def e_member(self, meta, name, child):
+		return EMember(self.obj(meta), name, child)
+
+	def e_recep(self, meta):
+		return ERecep(self.obj(meta))
+
+	def e_lambda(self, meta, type, block):
+		return ELambda(self.obj(meta), type, block)
+
+	def e_at(self, meta, addr):
+		return EAt(self.obj(meta), addr)
+	
+	def e_addr(self, meta, obj):
+		return EAddr(self.obj(meta), obj)
+	
 	# terminals
 	def DECIMAL(self, tkn):
 		value = int(tkn.value)
@@ -579,7 +620,7 @@ class Cleaner(Transformer):
 	
 	def NAME(self, tkn:Token):
 		return Name(self.obj(tkn), tkn.value)
-	
+
 	def SYMBOL(self, tkn:Token):
 		return Name(self.obj(tkn), tkn.value)
 	
