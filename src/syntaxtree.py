@@ -93,6 +93,8 @@ class Node():
 					a = objToJson(elem, indent+indent_char)
 					s += f'{a},\n'
 				return f'{s[:-2]}\n{indent}]'
+			elif isinstance(value, int):
+				return f'{value}'
 			elif value == None:
 				return 'null'
 			else:
