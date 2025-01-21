@@ -82,7 +82,7 @@ class Node():
 
 		def objToJson(obj, indent):
 			if isinstance(obj, String) or isinstance(obj, Char):
-				return f'"str(obj.value.encode())"'
+				return f'"{str(obj.value.encode())}"'
 			elif isinstance(obj, Node):
 				return obj.json(dump_meta, indent)
 			elif isinstance(value, tuple) or isinstance(value, list):
@@ -109,124 +109,23 @@ class Node():
 				s += f'{indented}"{key}": {a},\n'
 		return f'{s[:-2]}\n{indent}}}'
 	
-	def traverse(self, f, topdown=True):
-		if topdown:
-			f(self)
+	def traverse(self, f, topdown=True, meta=False):
+		if topdown: f(self)
 		
-		if isinstance(self, File):
-			self.export.traverse(f, topdown)
-			for i in self.imports:
-				i.traverse(f, topdown)
-			for s in self.statements:
-				s.traverse(f, topdown)
-		elif isinstance(self, SExport):
-			for s in self.signatures:
-				s.traverse(f, topdown)
-		elif isinstance(self, SImport):
-			self.name.traverse(f, topdown)
-			if self.rename:
-				self.rename.traverse(f, topdown)
-			for s in self.signatures:
-				s.traverse(f, topdown)
-		
-		elif isinstance(self, SEmpty): pass
-		elif isinstance(self, SProg):
-			self.signature.traverse(f, topdown)
-			self.exp.traverse(f, topdown)
-		elif isinstance(self, SBiop):
-			self.sig1.traverse(f, topdown)
-			self.sig2.traverse(f, topdown)
-			self.ret.traverse(f, topdown)
-			self.exp.traverse(f, topdown)
-		elif isinstance(self, SType):
-			self.name.traverse(f, topdown)
-			self.type.traverse(f, topdown)
-		elif isinstance(self, SEnum):
-			self.name.traverse(f, topdown)
-			for e in self.elems:
-				e.traverse(f, topdown)
-		elif isinstance(self, EnumElem):
-			self.name.traverse(f, topdown)
-			if self.exp:
-				self.exp.traverse(f, topdown)
+		for key in self.__dict__:
+			obj = self.__getattribute__(key)
 
-		elif isinstance(self, TAddr):
-			self.type.traverse(f, topdown)
-		elif isinstance(self, TAlias):
-			self.name.traverse(f, topdown)
-		elif isinstance(self, TVoid): pass
-		elif isinstance(self, TSized):
-			self.size.traverse(f, topdown)
-		elif isinstance(self, TUnion):
-			self.t1.traverse(f, topdown)
-			self.t2.traverse(f, topdown)
-		elif isinstance(self, TFunc):
-			self.parameter.traverse(f, topdown)
-			self.ret.traverse(f, topdown)
-		elif isinstance(self, TNamedFunc):
-			self.parameter.traverse(f, topdown)
-			self.ret.traverse(f, topdown)
-		elif isinstance(self, TStruct):
-			for m in self.members:
-				m.traverse(f, topdown)
-		
-		elif isinstance(self, Signature):
-			self.name.traverse(f, topdown)
-			self.type.traverse(f, topdown)
-		
-		elif isinstance(self, SWrite):
-			self.address.traverse(f, topdown)
-			self.value.traverse(f, topdown)
-		elif isinstance(self, SIgnore):
-			self.exp.traverse(f, topdown)
-		elif isinstance(self, SWhile):
-			self.condition.traverse(f, topdown)
-			self.body.traverse(f, topdown)
-		elif isinstance(self, SDo):
-			self.condition.traverse(f, topdown)
-			self.body.traverse(f, topdown)
-		elif isinstance(self, SReturn):
-			if self.value:
-				self.value.traverse(f, topdown)
-		elif isinstance(self, SContinue): pass
-		elif isinstance(self, SBreak): pass
+			if isinstance(obj, Node):
+				obj.traverse(f, topdown, meta)
+			elif isinstance(obj, tuple) or isinstance(obj, list):
+				for elem in obj:
+					if isinstance(elem, Node):
+						elem.traverse(f, topdown, meta)
+			else:
+				pass
 
-		elif isinstance(self, EApp):
-			self.func.traverse(f, topdown)
-			self.arg.traverse(f, topdown)
-		elif isinstance(self, EBlock):
-			for s in self.statements:
-				s.traverse(f, topdown)
-		elif isinstance(self, EPipe):
-			self.input.traverse(f, topdown)
-			self.output.traverse(f, topdown)
-		elif isinstance(self, ELambda):
-			self.type.traverse(f, topdown)
-			self.body.traverse(f, topdown)
-		elif isinstance(self, EMember):
-			self.parent.traverse(f, topdown)
-			self.member.traverse(f, topdown)
-		elif isinstance(self, ERead):
-			self.address.traverse(f, topdown)
-		elif isinstance(self, EIf):
-			self.condition.traverse(f, topdown)
-			self.exp1.traverse(f, topdown)
-			self.exp2.traverse(f, topdown)
-		elif isinstance(self, EArray):
-			for e in self.elements:
-				e.traverse(f, topdown)
+		if not topdown: f(self)
 
-		elif isinstance(self, Integer): pass
-		elif isinstance(self, Name): pass
-		elif isinstance(self, Char): pass
-		elif isinstance(self, String): pass
-		else:
-			raise CompilationException(
-				"Undefined AST node class for Ast.traverse named: " + self.__class__.__name__
-			)
-
-		if not topdown:
-			f(self)
 
 # Dataclasses for building the AST
 @dataclass
