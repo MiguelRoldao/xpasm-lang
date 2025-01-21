@@ -27,28 +27,26 @@ with open(grammar_path,"r") as f:
 def generateAST(file_path:str, file: str) -> str:
 	try:
 		ast_lark = grammar.parse(file)
-		print(ast_lark)
 	except lark.exceptions.UnexpectedCharacters as e:
 		#print(f"\nParserError: Unexpected character '{e.char}' at line {e.line} col {e.column}:\n\n{e._context}\n{e.}")
-		print("\nLexer error: " + str(e))
+		print("Lexer error: " + str(e))
 		return
 	except lark.exceptions.UnexpectedToken as e:
-		print(f"Parser error: {e}\n{e.get_context(file, 100)}")
+		print(f"Parser error: {e}\n{e.get_context(file, 100)}\n")
 		print(e._terminals_by_name)
 		print(e.considered_rules)
-		exit()
+		return
 
-	print(ast_lark.pretty())
+	# print(ast_lark.pretty())
 	print(ast_lark)
 	
 	cleaner = Cleaner()
 	cleaner.path = file_path
 	cleaner.lines = file.splitlines()
 	ast:File = cleaner.transform(ast_lark)
+	
 	print(ast.json())
 	print("This was ast.json()")
-
-	return ast
 
 	# TODO: collect all compilation errors in a list, and then
 	# print them all at once, instead of stopping in the first
@@ -60,11 +58,6 @@ def generateAST(file_path:str, file: str) -> str:
 	# Duplicate Names
 	# Used Undefined Names
 	# Type Checker
-
-	# generate dictionary
-	#generator = Generator()
-	#ast = generator.transform(ast)
-	#print(ast)
 
 	#print(f"\nGenerated:\n{dict}")
 	#print(json.dumps(dict, indent=2))
